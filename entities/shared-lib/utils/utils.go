@@ -17,3 +17,11 @@ func Truncate(s string, n int) string {
 	}
 	return string(r[:n]) + "..."
 }
+
+// Contains reports whether needle appears in haystack, case-insensitively.
+//
+// Added in shared-lib v1.1.0 to demonstrate a backward-compatible minor
+// release that downstream modules can pick up via `go get -u`.
+func Contains(haystack, needle string) bool {
+	return strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))
+}
