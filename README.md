@@ -23,6 +23,13 @@ Companion consumer repo:
   `CONSUMER_DISPATCH_TOKEN` repo secret is configured (a PAT with `repo`
   scope on `go-multimodule-poc-consumer`) — without it, the consumer still
   picks up new tags via its own Dependabot config and scheduled check.
+- [`.github/workflows/goproxy-artifacts.yml`](.github/workflows/goproxy-artifacts.yml)
+  builds a static, GOPROXY-protocol-compatible file tree for all four
+  modules from their real Git tags (via
+  [`tools/goproxy-gen`](tools/goproxy-gen)) and uploads it as a build
+  artifact on every push to `main` — see
+  [`docs/goproxy-artifacts.md`](docs/goproxy-artifacts.md) for what it is,
+  how it's built, and how to point `GOPROXY` at it yourself.
 
 > **One deliberate deviation from the original brief:** module paths use
 > this repository's real import path
