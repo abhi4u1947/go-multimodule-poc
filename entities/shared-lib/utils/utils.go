@@ -25,3 +25,15 @@ func Truncate(s string, n int) string {
 func Contains(haystack, needle string) bool {
 	return strings.Contains(strings.ToLower(haystack), strings.ToLower(needle))
 }
+
+// Reverse returns s with its runes reversed.
+//
+// Unreleased: added after v1.1.0 but not yet tagged, used to demonstrate
+// Go pseudo-versions when a module is required at a commit with no tag.
+func Reverse(s string) string {
+	r := []rune(s)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return string(r)
+}
