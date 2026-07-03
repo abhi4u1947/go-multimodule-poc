@@ -20,3 +20,12 @@ func (r *Reader) Describe() string {
 	r.log.Info("estargz reader initialized")
 	return "estargz.Reader (stand-in implementation)"
 }
+
+// TOCDigest returns a placeholder digest for the archive's table of
+// contents.
+//
+// Added in estargz v0.18.2.
+func (r *Reader) TOCDigest() string {
+	r.log.Info("computing TOC digest")
+	return "sha256:stand-in-toc-digest"
+}
