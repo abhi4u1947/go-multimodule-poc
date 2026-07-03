@@ -1,0 +1,174 @@
+name: Release module tags
+
+# Tags each independent Go module in this monorepo using the
+# directory-prefixed scheme Go requires for nested modules (see
+# docs/tag-naming.md), e.g. entities/shopping-svc/estargz/v0.18.3.
+#
+# Automatic mode (push to main): only modules whose directory changed in
+# the push get a new tag, bumped by one patch version from their last tag.
+# Bump level and target module can be overridden with workflow_dispatch.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "entities/**"
+  workflow_dispatch:
+    inputs:
+      module:
+        description: "Module to release (leave as 'auto' to detect from the last push)"
+        type: choice
+        default: auto
+        options:
+          - auto
+          - shared-lib
+          - shopping-svc
+          - shopping-svc/estargz
+          - shopping-svc/ipfs
+      bump:
+        description: "Version bump"
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+permissions:
+  contents: write
+
+jobs:
+  detect:
+    name: detect changed modules
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.set.outputs.modules }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: determine changed module directories
+        id: set
+        run: |
+          set -euo pipefail
+          declare -A DIRS=(
+            [shared-lib]=entities/shared-lib
+            [shopping-svc]=entities/shopping-svc
+            [shopping-svc/estargz]=entities/shopping-svc/estargz
+            [shopping-svc/ipfs]=entities/shopping-svc/ipfs
+          )
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.module }}" != "auto" ]; then
+            echo "modules=[\"${{ inputs.module }}\"]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only ${{ github.event.before || 'HEAD~1' }} ${{ github.sha }} || true)"
+          selected=()
+          # Longest directory prefix first, so a change under
+          # entities/shopping-svc/estargz doesn't also get attributed to the
+          # entities/shopping-svc (parent) module.
+          for name in "shopping-svc/estargz" "shopping-svc/ipfs" "shopping-svc" "shared-lib"; do
+            dir="${DIRS[$name]}"
+            if echo "$changed_files" | grep -q "^$dir/"; then
+              already_covered=false
+              for s in "${selected[@]}"; do
+                [ "$s" = "shopping-svc" ] && [[ "$name" == shopping-svc/* ]] && already_covered=true
+              done
+              $already_covered || selected+=("$name")
+            fi
+          done
+
+          if [ ${#selected[@]} -eq 0 ]; then
+            echo "modules=[]" >> "$GITHUB_OUTPUT"
+          else
+            printf -v joined '"%s",' "${selected[@]}"
+            echo "modules=[${joined%,}]" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: release (${{ matrix.module }})
+    needs: detect
+    if: needs.detect.outputs.modules != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.detect.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: compute next version and tag
+        id: version
+        run: |
+          set -euo pipefail
+          module="${{ matrix.module }}"
+          prefix="entities/$module"
+          bump="${{ inputs.bump || 'patch' }}"
+
+          last_tag="$(git tag --list "$prefix/v*" | grep -Ev -- '-' | sort -V | tail -n1 || true)"
+          if [ -z "$last_tag" ]; then
+            next="v0.1.0"
+          else
+            ver="${last_tag#"$prefix"/v}"
+            IFS='.' read -r major minor patch <<< "$ver"
+            case "$bump" in
+              major) next="v$((major + 1)).0.0" ;;
+              minor) next="v${major}.$((minor + 1)).0" ;;
+              *)     next="v${major}.${minor}.$((patch + 1))" ;;
+            esac
+          fi
+
+          tag="$prefix/$next"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+          echo "module_path=github.com/${{ github.repository }}/$prefix" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (previous: ${last_tag:-none})"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: build + vet before tagging
+        working-directory: entities/${{ matrix.module }}
+        run: |
+          GOWORK=off go build ./...
+          GOWORK=off go vet ./...
+
+      - name: create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "${{ matrix.module }} ${{ steps.version.outputs.version }}"
+          body: |
+            Automated release of `${{ steps.version.outputs.module_path }}` at `${{ steps.version.outputs.version }}`.
+
+            ```
+            go get ${{ steps.version.outputs.module_path }}@${{ steps.version.outputs.version }}
+            ```
+
+      # Wakes the consumer repo's auto-update workflow immediately instead
+      # of waiting for its next scheduled/Dependabot check. Requires a
+      # CONSUMER_DISPATCH_TOKEN secret: a PAT (classic, `repo` scope, or a
+      # fine-grained token with contents:write + pull-requests:write on
+      # go-multimodule-poc-consumer) — see docs/NOTE-on-tags.md.
+      - name: notify consumer repo
+        if: ${{ secrets.CONSUMER_DISPATCH_TOKEN != '' }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.CONSUMER_DISPATCH_TOKEN }}
+          repository: ${{ github.repository_owner }}/go-multimodule-poc-consumer
+          event-type: module-released
+          client-payload: |-
+            {
+              "module_path": "${{ steps.version.outputs.module_path }}",
+              "version": "${{ steps.version.outputs.version }}",
+              "tag": "${{ steps.version.outputs.tag }}"
+            }
