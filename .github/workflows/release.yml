@@ -159,8 +159,17 @@ jobs:
       # CONSUMER_DISPATCH_TOKEN secret: a PAT (classic, `repo` scope, or a
       # fine-grained token with contents:write + pull-requests:write on
       # go-multimodule-poc-consumer) — see docs/NOTE-on-tags.md.
+      #
+      # `secrets` can't be referenced directly in a step's `if:` — GitHub
+      # Actions disallows it — so it's routed through an env var first.
+      - name: check for consumer dispatch token
+        id: dispatch_check
+        env:
+          TOKEN: ${{ secrets.CONSUMER_DISPATCH_TOKEN }}
+        run: echo "has_token=${{ env.TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
       - name: notify consumer repo
-        if: ${{ secrets.CONSUMER_DISPATCH_TOKEN != '' }}
+        if: steps.dispatch_check.outputs.has_token == 'true'
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.CONSUMER_DISPATCH_TOKEN }}
