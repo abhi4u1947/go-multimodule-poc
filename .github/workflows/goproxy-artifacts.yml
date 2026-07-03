@@ -1,0 +1,55 @@
+name: GOPROXY artifacts
+
+# Builds a static, GOPROXY-compatible file tree for every module in this
+# repo (see tools/goproxy-gen) and uploads it as a build artifact on every
+# push to main. Anyone can download it and point GOPROXY at it locally to
+# resolve this repo's modules without touching GitHub or the real module
+# proxy — useful for offline development, air-gapped CI, or just inspecting
+# exactly what a real GOPROXY response for these modules looks like.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build-goproxy-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: tools/goproxy-gen/go.sum
+
+      - name: generate GOPROXY tree
+        working-directory: tools/goproxy-gen
+        run: GOWORK=off go run . --repo ../.. --out ../../dist/goproxy
+
+      - name: sanity check — resolve every module through the generated tree
+        run: |
+          set -euo pipefail
+          export GOPROXY="file://$(pwd)/dist/goproxy"
+          export GOSUMDB=off
+          export GOPRIVATE="github.com/${{ github.repository_owner }}/*"
+          tmp="$(mktemp -d)"
+          cd "$tmp"
+          go mod init goproxy-smoke-test
+          go get "github.com/${{ github.repository }}/entities/shared-lib@latest"
+          go get "github.com/${{ github.repository }}/entities/shopping-svc@latest"
+          go get "github.com/${{ github.repository }}/entities/shopping-svc/estargz@latest"
+          go get "github.com/${{ github.repository }}/entities/shopping-svc/ipfs@latest"
+          cat go.mod
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goproxy-${{ github.sha }}
+          path: dist/goproxy
+          if-no-files-found: error
+          retention-days: 30
