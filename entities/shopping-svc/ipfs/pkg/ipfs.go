@@ -20,3 +20,10 @@ func (c *Client) Cat(cid string) string {
 	c.log.Info("fetching CID %s", cid)
 	return "content-for-" + cid
 }
+
+// Pin "pins" a CID so it is retained locally (stand-in implementation).
+//
+// Added in ipfs v0.18.2.
+func (c *Client) Pin(cid string) {
+	c.log.Info("pinning CID %s", cid)
+}
