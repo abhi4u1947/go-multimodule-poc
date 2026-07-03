@@ -2,10 +2,14 @@
 
 Every transcript below is **real, unedited `go` command output**, captured
 by actually running these commands against this repository's real commits
-and tags. See [`NOTE-on-tags.md`](./NOTE-on-tags.md) for exactly how (this
-sandbox cannot push Git tags to GitHub, so tags were resolved through a
-byte-identical local Git mirror of the same commits — nothing about Go's
-resolution behavior differs based on transport).
+and tags. Originally captured through a byte-identical local Git mirror
+(this sandbox couldn't push Git tags to GitHub yet — see
+[`NOTE-on-tags.md`](./NOTE-on-tags.md)), and since re-verified command by
+command against the real, tagged `github.com/abhi4u1947/go-multimodule-poc`
+through the real `proxy.golang.org`. Every transcript matched byte-for-byte
+(including `go.sum` content hashes and the module cache's recorded commit
+`Time` field) except experiment 5, which needed a correction — see there
+for details.
 
 All commands run from a scratch module that requires this repo's four
 modules, e.g.:
@@ -207,8 +211,24 @@ c0dc535 (tag: entities/shared-lib/v1.1.0) shared-lib: add utils.Contains helper 
 d86b6b1 (tag: entities/shared-lib/v1.0.0) shared-lib: initial logger, config, utils packages
 
 $ go get github.com/abhi4u1947/go-multimodule-poc/entities/shared-lib@claude/go-module-resolution-poc-1780jc
+go: github.com/abhi4u1947/go-multimodule-poc/entities/shared-lib@claude/go-module-resolution-poc-1780jc: invalid version: version "claude/go-module-resolution-poc-1780jc" invalid: disallowed version string
+```
+
+**Correction (verified against the real GitHub remote):** the branch name
+itself can't be used as a `@version` query here — `go` rejects any `@query`
+string containing `/` with "disallowed version string" (confirmed on both
+go1.24.7 and go1.26.1, so this isn't a toolchain-version artifact; it holds
+for any branch name with a slash in it, which `claude/go-module-resolution-poc-1780jc`
+has). The fix is to resolve the branch to its commit first and query by
+that instead — this is what actually produces the pseudo-version:
+
+```
+$ git rev-parse --short claude/go-module-resolution-poc-1780jc   # or any prefix of it
+8945534
+
+$ go get github.com/abhi4u1947/go-multimodule-poc/entities/shared-lib@8945534
 go: downloading github.com/abhi4u1947/go-multimodule-poc/entities/shared-lib v1.1.1-0.20260703101852-89455342706c
-go: upgraded github.com/abhi4u1947/go-multimodule-poc/entities/shared-lib v1.1.0 => v1.1.1-0.20260703101852-89455342706c
+go: added github.com/abhi4u1947/go-multimodule-poc/entities/shared-lib v1.1.1-0.20260703101852-89455342706c
 
 $ grep shared-lib go.mod
 	github.com/abhi4u1947/go-multimodule-poc/entities/shared-lib v1.1.1-0.20260703101852-89455342706c
