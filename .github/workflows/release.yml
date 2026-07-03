@@ -106,7 +106,11 @@ jobs:
           prefix="entities/$module"
           bump="${{ inputs.bump || 'patch' }}"
 
-          last_tag="$(git tag --list "$prefix/v*" | grep -Ev -- '-' | sort -V | tail -n1 || true)"
+          # Match exact semver tags only (vX.Y.Z with no suffix) — a naive
+          # "exclude anything with a hyphen" filter would wrongly exclude
+          # every tag for this module, since "shared-lib" itself contains
+          # a hyphen.
+          last_tag="$(git tag --list "$prefix/v*" | grep -E "^${prefix}/v[0-9]+\.[0-9]+\.[0-9]+\$" | sort -V | tail -n1 || true)"
           if [ -z "$last_tag" ]; then
             next="v0.1.0"
           else
