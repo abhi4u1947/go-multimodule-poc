@@ -1,0 +1,8 @@
+go 1.24
+
+use (
+	./entities/shared-lib
+	./entities/shopping-svc
+	./entities/shopping-svc/estargz
+	./entities/shopping-svc/ipfs
+)
