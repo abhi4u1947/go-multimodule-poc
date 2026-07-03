@@ -8,6 +8,22 @@ directives, and module path mismatches.
 Companion consumer repo:
 [`go-multimodule-poc-consumer`](https://github.com/abhi4u1947/go-multimodule-poc-consumer).
 
+## CI and releases
+
+- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) builds, vets, and
+  tests every module standalone (`GOWORK=off`, mirroring how an external
+  consumer resolves them) and via the local `go.work`, on every push/PR to
+  `main`.
+- [`.github/workflows/release.yml`](.github/workflows/release.yml) tags new
+  releases automatically: pushing a change under `entities/<module>/` on
+  `main` bumps that module's patch version and creates the correctly-prefixed
+  tag (`docs/tag-naming.md`) plus a GitHub Release. `workflow_dispatch` lets
+  you pick the module and bump level (patch/minor/major) manually. It also
+  pings the consumer repo's `auto-update` workflow immediately if a
+  `CONSUMER_DISPATCH_TOKEN` repo secret is configured (a PAT with `repo`
+  scope on `go-multimodule-poc-consumer`) — without it, the consumer still
+  picks up new tags via its own Dependabot config and scheduled check.
+
 > **One deliberate deviation from the original brief:** module paths use
 > this repository's real import path
 > (`github.com/abhi4u1947/go-multimodule-poc`) instead of the placeholder

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  build-standalone:
+    name: build (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - module: shared-lib
+            dir: entities/shared-lib
+          - module: shopping-svc
+            dir: entities/shopping-svc
+          - module: shopping-svc/estargz
+            dir: entities/shopping-svc/estargz
+          - module: shopping-svc/ipfs
+            dir: entities/shopping-svc/ipfs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+          cache-dependency-path: "**/go.sum"
+
+      # GOWORK=off forces resolution through go.mod's require/go.sum against
+      # the real tagged dependency, exactly as an external consumer would
+      # see it — the repo-root go.work is for local development only and
+      # would otherwise mask real module-boundary/version bugs here.
+      - name: go build (standalone, GOWORK=off)
+        working-directory: ${{ matrix.dir }}
+        run: GOWORK=off go build ./...
+
+      - name: go vet (standalone, GOWORK=off)
+        working-directory: ${{ matrix.dir }}
+        run: GOWORK=off go vet ./...
+
+      - name: go test (standalone, GOWORK=off)
+        working-directory: ${{ matrix.dir }}
+        run: GOWORK=off go test ./...
+
+  build-workspace:
+    name: build (go.work, all modules together)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: go build ./entities/... (workspace mode)
+        run: |
+          for m in entities/shared-lib entities/shopping-svc entities/shopping-svc/estargz entities/shopping-svc/ipfs; do
+            echo "== $m =="
+            go build "./$m/..."
+            go vet "./$m/..."
+          done
+
+      - name: run shopping-svc
+        run: go run ./entities/shopping-svc/cmd/shopping

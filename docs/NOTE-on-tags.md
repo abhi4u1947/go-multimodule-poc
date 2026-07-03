@@ -36,3 +36,19 @@ against `https://github.com/abhi4u1947/go-multimodule-poc` directly — no
 mirror, no special `GOPRIVATE`/git config needed beyond what any private
 repo normally requires (see [`README.md`](../README.md#requirements) for
 that one-time setup).
+
+## Update: tags are now published, and releases are automated
+
+The 8 tags above were pushed for real from a machine without this sandbox's
+restriction, and every `docs/experiments.md` transcript was re-verified
+against the genuine GitHub remote (see that file's header for the
+verification note). `scripts/tag-releases.sh` remains for reference/bootstrap
+only — going forward, new releases are cut automatically by
+[`.github/workflows/release.yml`](../.github/workflows/release.yml): pushing
+a change under `entities/<module>/` on `main` bumps that module's patch
+version and tags+releases it, and `workflow_dispatch` allows a manual
+module/bump-level choice. See that workflow file for the exact tag-naming
+and version-bump logic, and
+[`go-multimodule-poc-consumer`](https://github.com/abhi4u1947/go-multimodule-poc-consumer)'s
+`.github/workflows/auto-update.yml` + `.github/dependabot.yml` for how the
+consumer picks up new tags automatically.
